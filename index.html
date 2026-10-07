@@ -22,6 +22,9 @@
            text-shadow: 0 0 2vw rgba(255,122,26,.45); animation: flicker 6s infinite; }
   .qr-wrap { background: #fff; padding: 1.2vw; border-radius: 1.2vw; width: min(28vw, 52vh); box-shadow: 0 0 4vw rgba(162,107,255,.35); }
   #qr img, #qr canvas { width: 100% !important; height: auto !important; display: block; }
+  .qr-wrap.locked { background: #1f1429; border: 2px dashed var(--line); box-shadow: none; aspect-ratio: 1;
+                    display: flex; align-items: center; justify-content: center; text-align: center; }
+  .qr-locked { color: var(--muted); font-size: 1.3vw; line-height: 1.4; padding: 2vw; }
   .scan { font-size: 2.2vw; font-weight: 800; }
   .scan b { color: var(--green); }
   .url { font-size: 1vw; color: var(--muted); word-break: break-all; }
@@ -105,7 +108,7 @@
 <main id="lobby">
   <section class="join">
     <h1 class="title" id="title">Concurso de<br>Disfraces</h1>
-    <div class="qr-wrap"><div id="qr"></div></div>
+    <div class="qr-wrap locked" id="qrWrap"><div id="qr" hidden></div><p class="qr-locked" id="qrLocked">🔒<br>El código QR aparece cuando el anfitrión inicia sesión</p></div>
     <p class="scan">¡Escanea para <b>votar!</b></p>
     <p class="url" id="url"></p>
     <div class="status" id="status"></div>
@@ -130,6 +133,7 @@
 
 <button id="gear" class="host" title="Más opciones" hidden>⚙︎</button>
 <div id="panel" hidden>
+  <button id="newCode">Nuevo código QR</button>
   <button id="reset">Borrar todos los votos</button>
   <button id="logout">Cerrar sesión de anfitrión</button>
   <p>Teclado: <b>V</b> abrir/cerrar votación · <b>F</b> pantalla completa</p>
@@ -138,7 +142,7 @@
 
 <script type="module">
   import { CATEGORIES, TITLE } from "./config.js";
-  import { onData, write, tally, isOpen, watchHost, hostSignIn, hostSignOut, DEMO } from "./store.js";
+  import { onData, write, tally, isOpen, watchHost, hostSignIn, hostSignOut, partyCode, resetVotes, DEMO } from "./store.js";
 
   const $ = (id) => document.getElementById(id);
   const TOP = { grand: 5, other: 4 };
@@ -146,10 +150,17 @@
   let showing = false;
   let isHost = false;
 
-  // QR code pointing at the phone page next to this one.
-  const voteUrl = new URL("vote.html", location.href).href;
-  new QRCode($("qr"), { text: voteUrl, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M });
-  $("url").textContent = voteUrl.replace(/^https?:\/\//, "");
+  // QR code pointing at the phone page, carrying the secret party code. Only the signed-in host can show it.
+  function showQR(code) {
+    const voteUrl = new URL("vote.html", location.href);
+    if (code) voteUrl.searchParams.set("c", code);
+    $("qr").innerHTML = "";
+    if (code) new QRCode($("qr"), { text: voteUrl.href, width: 512, height: 512, correctLevel: QRCode.CorrectLevel.M });
+    $("qr").hidden = !code;
+    $("qrLocked").hidden = !!code;
+    $("qrWrap").classList.toggle("locked", !code);
+    $("url").textContent = code ? voteUrl.href.replace(/^https?:\/\//, "") : "";
+  }
   if (TITLE !== "Concurso de Disfraces") $("title").textContent = TITLE;
   $("demo").hidden = !DEMO;
 
@@ -240,7 +251,13 @@
     }
     if (signedIn) $("hostMsg").textContent = "";
     showHostControls(signedIn);
+    try { showQR(signedIn ? await partyCode() : null); }
+    catch { $("hostMsg").textContent = "No se pudo crear el código QR. Revisa las reglas de la base de datos."; }
   });
+  $("newCode").onclick = async () => {
+    if (!confirm("¿Crear un código QR nuevo? El anterior dejará de servir para votar (los votos ya enviados se quedan).")) return;
+    try { showQR(await partyCode({ renew: true })); } catch { denied(); }
+  };
   $("hostLink").onclick = async () => {
     $("hostMsg").textContent = "";
     try { await hostSignIn(); }
@@ -262,7 +279,7 @@
   $("reopen").onclick = openVoting;
 
   $("gear").onclick = () => ($("panel").hidden = !$("panel").hidden);
-  $("reset").onclick = () => { if (confirm("¿Borrar todos los votos? No se puede deshacer.")) write("votes", null).catch(denied); };
+  $("reset").onclick = () => { if (confirm("¿Borrar todos los votos? No se puede deshacer.")) resetVotes().catch(denied); };
   addEventListener("keydown", (e) => {
     if (e.target.tagName === "INPUT") return;
     if (isHost && (e.key === "v" || e.key === "V")) isOpen(data) ? closeVoting() : openVoting();
