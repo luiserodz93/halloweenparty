@@ -61,9 +61,9 @@ export async function watchHost(cb) {
   const a = await hostAuth();
   a.onAuthStateChanged(a.auth, (user) => cb(!!user));
 }
-export async function hostSignIn(email, password) {
+export async function hostSignIn() {
   const a = await hostAuth();
-  await a.signInWithEmailAndPassword(a.auth, email, password);
+  await a.signInWithPopup(a.auth, new a.GoogleAuthProvider());
 }
 export async function hostSignOut() {
   if (DEMO) return;
