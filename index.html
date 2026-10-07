@@ -45,6 +45,21 @@
   .big.active::before { content: "✓ "; }
   .big:disabled { cursor: default; }
 
+  /* Host sign-in: guests who open this page see no controls */
+  #hostLink { background: none; border: 0; color: var(--muted); font: 600 1vw Inter, sans-serif; cursor: pointer; opacity: .5; }
+  #hostLink:hover { opacity: 1; }
+  #login { display: grid; gap: 12px; width: 100%; max-width: 360px; background: #1f1429; border: 1px solid var(--line);
+           border-radius: 14px; padding: 20px; }
+  #login h3 { font-size: 18px; }
+  #login input { font: 500 16px Inter, sans-serif; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
+                 background: #0f0915; color: var(--text); outline: none; }
+  #login input:focus { border-color: var(--purple); }
+  #login .row2 { display: flex; gap: 10px; }
+  #login button { flex: 1; font: 700 16px Inter, sans-serif; padding: 12px; border-radius: 10px; cursor: pointer; }
+  #login button[type=submit] { background: var(--purple); color: #fff; border: 0; }
+  #login button[type=button] { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  #loginError { color: #ff8a8a; font-size: 14px; min-height: 18px; }
+
   /* ---------- Results: shown only once voting is closed ---------- */
   #results { height: 100vh; display: flex; flex-direction: column; padding: 3vh 2.5vw; gap: 2vh; }
   .results-head { display: flex; justify-content: space-between; align-items: center; }
@@ -89,7 +104,8 @@
   #gear:hover { opacity: .8; }
   #panel { position: fixed; right: 1vw; bottom: 4.5vw; background: #1f1429; border: 1px solid var(--line); border-radius: 12px;
            padding: 16px; display: grid; gap: 10px; width: 260px; font-size: 14px; box-shadow: 0 10px 40px rgba(0,0,0,.5); }
-  #panel button { font: 600 14px Inter, sans-serif; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: #2a1c36; color: #ff8a8a; cursor: pointer; }
+  #panel button { font: 600 14px Inter, sans-serif; padding: 10px; border-radius: 8px; border: 1px solid var(--line); background: #2a1c36; color: var(--text); cursor: pointer; }
+  #panel #reset { color: #ff8a8a; }
   #panel p { color: var(--muted); font-size: 12px; }
   .demo { position: fixed; left: 50%; bottom: 1vh; transform: translateX(-50%); background: #3a2a00; color: #ffd27a;
           padding: 6px 14px; border-radius: 99px; font-size: 13px; }
@@ -107,34 +123,44 @@
   </section>
   <section class="controls">
     <p class="secret">🤫 Los resultados son <b>secretos</b><br>hasta que se cierre la votación</p>
-    <button id="openBtn" class="big open">Abrir votación</button>
-    <button id="closeBtn" class="big close">Cerrar votación</button>
+    <button id="openBtn" class="big open host" hidden>Abrir votación</button>
+    <button id="closeBtn" class="big close host" hidden>Cerrar votación</button>
+    <button id="hostLink" class="guest" hidden>🔒 Anfitrión</button>
+    <form id="login" hidden>
+      <h3>Acceso del anfitrión</h3>
+      <input id="email" type="email" placeholder="Correo" autocomplete="username" required>
+      <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" required>
+      <p id="loginError"></p>
+      <div class="row2"><button type="button" id="loginCancel">Cancelar</button><button type="submit">Entrar</button></div>
+    </form>
   </section>
 </main>
 
 <section id="results" hidden>
   <header class="results-head">
     <h1>🏆 Resultados</h1>
-    <div class="side"><span id="finalCount"></span><button id="reopen">Abrir votación</button></div>
+    <div class="side"><span id="finalCount"></span><button id="reopen" class="host" hidden>Abrir votación</button></div>
   </header>
   <div class="boards" id="boards"></div>
 </section>
 
-<button id="gear" title="Más opciones">⚙︎</button>
+<button id="gear" class="host" title="Más opciones" hidden>⚙︎</button>
 <div id="panel" hidden>
   <button id="reset">Borrar todos los votos</button>
+  <button id="logout">Cerrar sesión de anfitrión</button>
   <p>Teclado: <b>V</b> abrir/cerrar votación · <b>F</b> pantalla completa</p>
 </div>
 <div class="demo" id="demo" hidden>Modo demo: los votos solo se sincronizan entre pestañas de este navegador. Añade Firebase en config.js para usarlo en vivo.</div>
 
 <script type="module">
   import { CATEGORIES, TITLE } from "./config.js";
-  import { onData, write, tally, isOpen, DEMO } from "./store.js";
+  import { onData, write, tally, isOpen, watchHost, hostSignIn, hostSignOut, DEMO } from "./store.js";
 
   const $ = (id) => document.getElementById(id);
   const TOP = { grand: 5, other: 4 };
   let data = {};
   let showing = false;
+  let isHost = false;
 
   // QR code pointing at the phone page next to this one.
   const voteUrl = new URL("vote.html", location.href).href;
@@ -211,17 +237,41 @@
 
   onData((d) => { data = d; render(); });
 
-  // Open / close voting
-  const openVoting = () => write("state/open", true);
-  const closeVoting = () => { if (confirm("¿Cerrar la votación y mostrar los resultados?")) write("state/open", false); };
+  // Host controls only show after signing in; the database rejects these writes from anyone else.
+  watchHost((signedIn) => {
+    isHost = signedIn;
+    document.querySelectorAll(".host").forEach((el) => (el.hidden = !signedIn));
+    $("hostLink").hidden = signedIn;
+    $("login").hidden = true;
+    if (!signedIn) $("panel").hidden = true;
+  });
+  $("hostLink").onclick = () => { $("hostLink").hidden = true; $("login").hidden = false; $("email").focus(); };
+  $("loginCancel").onclick = () => { $("login").hidden = true; $("hostLink").hidden = false; $("loginError").textContent = ""; };
+  $("login").onsubmit = async (e) => {
+    e.preventDefault();
+    $("loginError").textContent = "";
+    try {
+      await hostSignIn($("email").value.trim(), $("password").value);
+      $("password").value = "";
+    } catch (err) {
+      $("loginError").textContent = /invalid|wrong|user-not-found/.test(err.code || "")
+        ? "Correo o contraseña incorrectos." : "No se pudo iniciar sesión (" + (err.code || err.message) + ").";
+    }
+  };
+  $("logout").onclick = () => hostSignOut();
+
+  const denied = () => alert("Solo el anfitrión puede hacer esto. Inicia sesión de nuevo con 🔒 Anfitrión.");
+  const openVoting = () => write("state/open", true).catch(denied);
+  const closeVoting = () => { if (confirm("¿Cerrar la votación y mostrar los resultados?")) write("state/open", false).catch(denied); };
   $("openBtn").onclick = openVoting;
   $("closeBtn").onclick = closeVoting;
   $("reopen").onclick = openVoting;
 
   $("gear").onclick = () => ($("panel").hidden = !$("panel").hidden);
-  $("reset").onclick = () => { if (confirm("¿Borrar todos los votos? No se puede deshacer.")) write("votes", null); };
+  $("reset").onclick = () => { if (confirm("¿Borrar todos los votos? No se puede deshacer.")) write("votes", null).catch(denied); };
   addEventListener("keydown", (e) => {
-    if (e.key === "v" || e.key === "V") isOpen(data) ? closeVoting() : openVoting();
+    if (e.target.tagName === "INPUT") return;
+    if (isHost && (e.key === "v" || e.key === "V")) isOpen(data) ? closeVoting() : openVoting();
     if (e.key === "f" || e.key === "F") document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
   });
 
