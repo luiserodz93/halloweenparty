@@ -1,11 +1,22 @@
-import { FIREBASE_CONFIG, ROOT, CATEGORIES } from "./config.js";
+import * as config from "./config.js";
+
+const { FIREBASE_CONFIG, ROOT, CATEGORIES } = config;
 
 const listeners = new Set();
 let current = {};
 let loaded = false;
 const emit = () => listeners.forEach((cb) => cb(current));
 
-export const DEMO = !FIREBASE_CONFIG?.databaseURL || FIREBASE_CONFIG.databaseURL.includes("YOUR_");
+const placeholder = !FIREBASE_CONFIG?.databaseURL || FIREBASE_CONFIG.databaseURL.includes("YOUR_");
+// A copy of this repo hosted somewhere else still carries the original owner's database settings.
+// Run it in demo mode there instead of writing votes into someone else's database.
+const liveHosts = config.LIVE_HOSTS || [];
+const wrongHost = liveHosts.length > 0 && !liveHosts.includes(location.hostname);
+if (wrongHost && !placeholder)
+  console.warn(`Demo mode: "${location.hostname}" isn't in LIVE_HOSTS in config.js. ` +
+    "To go live, put your own Firebase settings in config.js and add your site's hostname to LIVE_HOSTS.");
+
+export const DEMO = placeholder || wrongHost;
 
 let writeFn;
 if (!DEMO) {
