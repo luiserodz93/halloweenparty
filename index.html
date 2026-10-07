@@ -48,17 +48,7 @@
   /* Host sign-in: guests who open this page see no controls */
   #hostLink { background: none; border: 0; color: var(--muted); font: 600 1vw Inter, sans-serif; cursor: pointer; opacity: .5; }
   #hostLink:hover { opacity: 1; }
-  #login { display: grid; gap: 12px; width: 100%; max-width: 360px; background: #1f1429; border: 1px solid var(--line);
-           border-radius: 14px; padding: 20px; }
-  #login h3 { font-size: 18px; }
-  #login input { font: 500 16px Inter, sans-serif; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);
-                 background: #0f0915; color: var(--text); outline: none; }
-  #login input:focus { border-color: var(--purple); }
-  #login .row2 { display: flex; gap: 10px; }
-  #login button { flex: 1; font: 700 16px Inter, sans-serif; padding: 12px; border-radius: 10px; cursor: pointer; }
-  #login button[type=submit] { background: var(--purple); color: #fff; border: 0; }
-  #login button[type=button] { background: transparent; color: var(--muted); border: 1px solid var(--line); }
-  #loginError { color: #ff8a8a; font-size: 14px; min-height: 18px; }
+  #hostMsg { color: #ff8a8a; font-size: 1vw; text-align: center; max-width: 30vw; }
 
   /* ---------- Results: shown only once voting is closed ---------- */
   #results { height: 100vh; display: flex; flex-direction: column; padding: 3vh 2.5vw; gap: 2vh; }
@@ -125,14 +115,8 @@
     <p class="secret">🤫 Los resultados son <b>secretos</b><br>hasta que se cierre la votación</p>
     <button id="openBtn" class="big open host" hidden>Abrir votación</button>
     <button id="closeBtn" class="big close host" hidden>Cerrar votación</button>
-    <button id="hostLink" class="guest" hidden>🔒 Anfitrión</button>
-    <form id="login" hidden>
-      <h3>Acceso del anfitrión</h3>
-      <input id="email" type="email" placeholder="Correo" autocomplete="username" required>
-      <input id="password" type="password" placeholder="Contraseña" autocomplete="current-password" required>
-      <p id="loginError"></p>
-      <div class="row2"><button type="button" id="loginCancel">Cancelar</button><button type="submit">Entrar</button></div>
-    </form>
+    <button id="hostLink" hidden>🔒 Anfitrión</button>
+    <p id="hostMsg"></p>
   </section>
 </main>
 
@@ -237,25 +221,35 @@
 
   onData((d) => { data = d; render(); });
 
-  // Host controls only show after signing in; the database rejects these writes from anyone else.
-  watchHost((signedIn) => {
-    isHost = signedIn;
-    document.querySelectorAll(".host").forEach((el) => (el.hidden = !signedIn));
-    $("hostLink").hidden = signedIn;
-    $("login").hidden = true;
-    if (!signedIn) $("panel").hidden = true;
+  // Host controls only show for the host's Google account. Any Google account can sign in, so we
+  // confirm it's the host by writing to "hostcheck", which the database rules allow only for the host.
+  function showHostControls(on) {
+    isHost = on;
+    document.querySelectorAll(".host").forEach((el) => (el.hidden = !on));
+    $("hostLink").hidden = on;
+    if (!on) $("panel").hidden = true;
+  }
+  watchHost(async (signedIn) => {
+    if (signedIn && !DEMO) {
+      try { await write("hostcheck", Date.now()); }
+      catch {
+        await hostSignOut();
+        $("hostMsg").textContent = "Esa cuenta de Google no es la del anfitrión.";
+        return;
+      }
+    }
+    if (signedIn) $("hostMsg").textContent = "";
+    showHostControls(signedIn);
   });
-  $("hostLink").onclick = () => { $("hostLink").hidden = true; $("login").hidden = false; $("email").focus(); };
-  $("loginCancel").onclick = () => { $("login").hidden = true; $("hostLink").hidden = false; $("loginError").textContent = ""; };
-  $("login").onsubmit = async (e) => {
-    e.preventDefault();
-    $("loginError").textContent = "";
-    try {
-      await hostSignIn($("email").value.trim(), $("password").value);
-      $("password").value = "";
-    } catch (err) {
-      $("loginError").textContent = /invalid|wrong|user-not-found/.test(err.code || "")
-        ? "Correo o contraseña incorrectos." : "No se pudo iniciar sesión (" + (err.code || err.message) + ").";
+  $("hostLink").onclick = async () => {
+    $("hostMsg").textContent = "";
+    try { await hostSignIn(); }
+    catch (err) {
+      const code = err.code || "";
+      if (code.includes("popup-closed") || code.includes("cancelled-popup")) return;
+      $("hostMsg").textContent = code.includes("popup-blocked")
+        ? "El navegador bloqueó la ventana de Google. Permite ventanas emergentes e inténtalo de nuevo."
+        : "No se pudo iniciar sesión (" + (code || err.message) + ").";
     }
   };
   $("logout").onclick = () => hostSignOut();
