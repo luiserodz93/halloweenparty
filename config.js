@@ -3,7 +3,7 @@
 // Your Firebase web config (Firebase console → Project settings → Your apps).
 // While it still says "YOUR_...", the app runs in DEMO MODE (votes only sync between tabs in one browser).
 export const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyB7•••••••••••••••••••••••••••••••",
+  apiKey: "AIzaSyB7TSxl8j75TcEVOdn6xSfThGdqxt9zmSs",
   authDomain: "halloween-party-85bff.firebaseapp.com",
   databaseURL: "https://halloween-party-85bff-default-rtdb.firebaseio.com",
   projectId: "halloween-party-85bff",
