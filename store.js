@@ -19,12 +19,13 @@ if (wrongHost && !placeholder)
 export const DEMO = placeholder || wrongHost;
 
 const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
-let writeFn, app;
+let writeFn, app, db, fb;
 if (!DEMO) {
   const { initializeApp } = await import(SDK + "firebase-app.js");
-  const { getDatabase, ref, onValue, set } = await import(SDK + "firebase-database.js");
+  fb = await import(SDK + "firebase-database.js");
+  const { getDatabase, ref, onValue, set } = fb;
   app = initializeApp(FIREBASE_CONFIG);
-  const db = getDatabase(app);
+  db = getDatabase(app);
   onValue(ref(db, ROOT), (snap) => { current = snap.val() || {}; loaded = true; emit(); });
   writeFn = (path, value) => set(ref(db, path ? `${ROOT}/${path}` : ROOT), value ?? null);
 } else {
@@ -73,6 +74,36 @@ export async function hostSignOut() {
 
 export function onData(cb) { listeners.add(cb); if (loaded) cb(current); }
 export const write = (path, value) => writeFn(path, value);
+
+// Party code: the TV's QR carries a secret code, and the database only accepts a ballot
+// that comes with it, so only people who can see the TV can vote. The code is stored where
+// only the host can read it, and each phone's copy goes to a write-only "proofs" list.
+const CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+const newCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), (b) => CODE_CHARS[b % 32]).join("");
+
+export async function partyCode({ renew = false } = {}) {
+  if (DEMO) {
+    let code = renew ? null : localStorage.getItem("halloween-demo-code");
+    if (!code) { code = newCode(); localStorage.setItem("halloween-demo-code", code); }
+    return code;
+  }
+  const r = fb.ref(db, `codes/${ROOT}`);
+  let code = renew ? null : (await fb.get(r)).val();
+  if (!code) { code = newCode(); await fb.set(r, code); }
+  return code;
+}
+
+export async function castVote(ballot, code) {
+  const me = voterId();
+  if (DEMO) return writeFn(`votes/${me}`, ballot);
+  // Both writes land together or not at all; the rules check the proof matches the code.
+  await fb.update(fb.ref(db), { [`proofs/${ROOT}/${me}`]: code || "", [`${ROOT}/votes/${me}`]: ballot });
+}
+
+export async function resetVotes() {
+  if (DEMO) return writeFn("votes", null);
+  await fb.update(fb.ref(db), { [`${ROOT}/votes`]: null, [`proofs/${ROOT}`]: null });
+}
 
 // One id per phone so re-voting replaces the old vote instead of adding one.
 export function voterId() {
