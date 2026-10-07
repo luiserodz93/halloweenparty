@@ -1,16 +1,16 @@
 # 🎃 Concurso de Disfraces: Halloween Costume Voting
 
-Live costume voting for the party. The TV shows a QR code and live leaderboards; guests scan, type a name for each category, and the results update instantly.
+Live costume voting for the party. The TV shows a QR code; guests scan, type a name for each category, and the results stay secret until voting is closed.
 
 ## Links
 
 | What | Link |
 |---|---|
-| 📺 **TV screen** (open this on the TV) | https://luiserodz.github.io/halloweenparty/ |
-| 📱 **Phone voting page** (what the QR opens) | https://luiserodz.github.io/halloweenparty/vote.html |
-| 💻 GitHub repo | https://github.com/luiserodz/halloweenparty |
-| ⚙️ GitHub Pages settings | https://github.com/luiserodz/halloweenparty/settings/pages |
-| 🚀 Deploy status (Actions) | https://github.com/luiserodz/halloweenparty/actions |
+| 📺 **TV screen** (open this on the TV) | https://luiserodz93.github.io/halloweenparty/ |
+| 📱 **Phone voting page** (what the QR opens) | https://luiserodz93.github.io/halloweenparty/vote.html |
+| 💻 GitHub repo | https://github.com/luiserodz93/halloweenparty |
+| ⚙️ GitHub Pages settings | https://github.com/luiserodz93/halloweenparty/settings/pages |
+| 🚀 Deploy status (Actions) | https://github.com/luiserodz93/halloweenparty/actions |
 | 🔥 Firebase project | https://console.firebase.google.com/project/halloween-party-85bff/overview |
 | 🗂️ Firebase votes (data) | https://console.firebase.google.com/project/halloween-party-85bff/database/halloween-party-85bff-default-rtdb/data |
 | 🔒 Firebase rules | https://console.firebase.google.com/project/halloween-party-85bff/database/halloween-party-85bff-default-rtdb/rules |
@@ -19,31 +19,35 @@ Live costume voting for the party. The TV shows a QR code and live leaderboards;
 
 | File | Purpose |
 |---|---|
-| `index.html` | TV screen: QR code, live leaderboards, host controls |
-| `vote.html` | Phone ballot (one vote per phone, locked after submitting) |
+| `index.html` | TV screen: QR code, voter count, open/close buttons, results reveal |
+| `vote.html` | Phone ballot (one vote per phone, locked after submitting, name suggestions) |
 | `config.js` | Firebase settings, title, and **categories** (edit here to rename/add/remove) |
 | `store.js` | Database connection and vote counting |
 
 ## Party night checklist
 
 1. Open the **TV screen** link on the TV and press **F** for fullscreen.
-2. Scan the QR with your own phone to make sure it works.
-3. Clear any test votes: ⚙︎ (faint, bottom-right) → **Borrar todos los votos**.
-4. Let guests vote. Leaderboards update live.
-5. When it's time, press **V** (or ⚙︎ → **Cerrar votación**). Phones lock and the final results stay on screen.
+2. Click **Abrir votación**.
+3. Scan the QR with your own phone to make sure it works.
+4. Clear any test votes: ⚙︎ (faint, bottom-right) → **Borrar todos los votos**.
+5. Let guests vote. The TV shows only how many people have voted; results stay secret 🤫.
+6. When it's time, click **Cerrar votación** → confirm. Phones lock and the 🏆 results are revealed.
 
 ### Host controls (TV screen)
 
-| Key / button | Action |
+| Control | Action |
 |---|---|
-| **V** | Open / close voting |
-| **F** | Fullscreen on / off |
+| **Abrir votación** | Open voting (hides results, shows the QR lobby) |
+| **Cerrar votación** | Close voting and reveal results |
+| Small **Abrir votación** on the results screen | Reopen voting and go back to the lobby |
+| **V** key | Open / close voting |
+| **F** key | Fullscreen on / off |
 | ⚙︎ → Borrar todos los votos | Delete all votes (can't be undone) |
 
 ## How voting works
 
 - Guests type a name per category; any category can be skipped. The last category (Ganador General) is the grand prize.
-- Names are matched ignoring case, extra spaces and accents (`maria lopez` = `María López`). Autocomplete suggests names others already typed.
+- Names are matched ignoring case, extra spaces and accents (`maria lopez` = `María López`). Tapping a field shows names others already typed, so spellings match.
 - **One vote per phone.** After submitting, the ballot is locked. Firebase rules also reject a second vote from the same phone and any vote while voting is closed.
 - Limit: a guest could vote again from a private tab or another browser/phone.
 
