@@ -46,16 +46,20 @@
     <p>Escribe el nombre de la persona por la que votas. Puedes saltarte cualquier categoría. <b>Solo se puede votar una vez.</b></p>
   </header>
   <div class="banner" id="closed" hidden>La votación está cerrada. ¡Mira la tele! 📺</div>
+  <div class="banner" id="nocode" hidden>Para votar, escanea el código QR que aparece en la tele 📺</div>
   <form id="ballot" autocomplete="off"></form>
   <p class="demo" id="demo" hidden>Modo demo: los votos solo se guardan en este navegador.</p>
 </div>
 
 <script type="module">
   import { CATEGORIES, TITLE } from "./config.js";
-  import { onData, write, voterId, isOpen, knownNames, normalize, DEMO } from "./store.js";
+  import { onData, castVote, voterId, isOpen, knownNames, normalize, DEMO } from "./store.js";
 
   const $ = (id) => document.getElementById(id);
   const me = voterId();
+  // The secret party code from the TV's QR. Without it the database won't accept the ballot.
+  const code = new URLSearchParams(location.search).get("c");
+  const needsCode = !DEMO && !code;
   const form = $("ballot");
   $("title").textContent = TITLE;
   $("demo").hidden = !DEMO;
@@ -90,8 +94,9 @@
     if (inputs.includes(document.activeElement)) suggest(document.activeElement);
     open = isOpen(data);
     $("closed").hidden = open;
-    inputs.forEach((i) => (i.disabled = !open || voted));
-    btn.disabled = !open;
+    $("nocode").hidden = !open || voted || !needsCode;
+    inputs.forEach((i) => (i.disabled = !open || voted || needsCode));
+    btn.disabled = !open || needsCode;
     btn.hidden = voted;
   });
 
@@ -120,16 +125,16 @@
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    if (!open || voted) return;
+    if (!open || voted || needsCode) return;
     const ballot = {};
     for (const i of inputs) { const v = i.value.trim().replace(/\s+/g, " "); if (v) ballot[i.name] = v; }
     if (!Object.keys(ballot).length) return note("Escribe al menos un nombre.");
     if (!confirm("¿Enviar tus votos? Después no podrás cambiarlos.")) return;
     btn.disabled = true;
     try {
-      await write(`votes/${me}`, ballot);
+      await castVote(ballot, code);
     } catch (err) {
-      note("No se pudo guardar. Revisa tu conexión e inténtalo de nuevo.");
+      note("No se pudo guardar. Vuelve a escanear el código QR de la tele e inténtalo de nuevo.");
       btn.disabled = false;
     }
   });
