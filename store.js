@@ -18,12 +18,13 @@ if (wrongHost && !placeholder)
 
 export const DEMO = placeholder || wrongHost;
 
-let writeFn;
+const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
+let writeFn, app;
 if (!DEMO) {
-  const SDK = "https://www.gstatic.com/firebasejs/10.12.2/";
   const { initializeApp } = await import(SDK + "firebase-app.js");
   const { getDatabase, ref, onValue, set } = await import(SDK + "firebase-database.js");
-  const db = getDatabase(initializeApp(FIREBASE_CONFIG));
+  app = initializeApp(FIREBASE_CONFIG);
+  const db = getDatabase(app);
   onValue(ref(db, ROOT), (snap) => { current = snap.val() || {}; loaded = true; emit(); });
   writeFn = (path, value) => set(ref(db, path ? `${ROOT}/${path}` : ROOT), value ?? null);
 } else {
@@ -43,6 +44,31 @@ if (!DEMO) {
     localStorage.setItem(KEY, JSON.stringify(data));
     current = data; emit();
   };
+}
+
+// Host sign-in (TV only, loaded on demand so phones don't download it).
+// The database rules only let the host's account open/close voting or delete votes.
+let authApi;
+async function hostAuth() {
+  if (!authApi) {
+    const m = await import(SDK + "firebase-auth.js");
+    authApi = { ...m, auth: m.getAuth(app) };
+  }
+  return authApi;
+}
+export async function watchHost(cb) {
+  if (DEMO) return cb(true); // demo mode has no database to protect
+  const a = await hostAuth();
+  a.onAuthStateChanged(a.auth, (user) => cb(!!user));
+}
+export async function hostSignIn(email, password) {
+  const a = await hostAuth();
+  await a.signInWithEmailAndPassword(a.auth, email, password);
+}
+export async function hostSignOut() {
+  if (DEMO) return;
+  const a = await hostAuth();
+  await a.signOut(a.auth);
 }
 
 export function onData(cb) { listeners.add(cb); if (loaded) cb(current); }
